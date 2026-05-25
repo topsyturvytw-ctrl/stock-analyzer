@@ -1,86 +1,64 @@
 import streamlit as st
 import pandas as pd
-import pandas_ta as ta
+import numpy as np
+import talib
 from FinMind.data import DataLoader
 
-# ========================================================
-# 🌟 請在下方貼上你在 FinMind 官網申請的免費 API Token 🌟
-FINMIND_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidG9wc3l0dXJ2eS50dyIsImVtYWlsIjoidG9wc3l0dXJ2eS50d0B5YWhvby5jb20udHciLCJ0b2tlbl92ZXJzaW9uIjowfQ.g8F7_b3ru58bFwW4JLe6JnD4IyV_0x5KFLFbG1j3Y8A"
-# ========================================================
+st.title("📈 股票技術分析器 (TA-Lib + FinMind)")
 
-st.set_page_config(page_title="台股綜合分析器", layout="wide")
+# 使用者輸入 FinMind API Token
+api_token = st.text_input("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidG9wc3l0dXJ2eS50dyIsImVtYWlsIjoidG9wc3l0dXJ2eS50d0B5YWhvby5jb20udHciLCJ0b2tlbl92ZXJzaW9uIjowfQ.g8F7_b3ru58bFwW4JLe6JnD4IyV_0x5KFLFbG1j3Y8A", type="password")
 
-st.title("📊 台股綜合分析器 - Web 版")
+# 使用者輸入股票代號
+stock_id = st.text_input("請輸入股票代號 (例如 2330):", "2330")
 
-stock_code = st.text_input("請輸入股票代號", "1789")
+# 選擇日期範圍
+start_date = st.date_input("開始日期", pd.to_datetime("2024-01-01"))
+end_date = st.date_input("結束日期", pd.to_datetime("2024-12-31"))
 
-if st.button("執行全面技術與估值分析"):
-    if not stock_code.strip():
-        st.warning("請先輸入股票代號！")
-    elif FINMIND_TOKEN == "你的_FINMIND_TOKEN":
-        st.error("請先填入您的 FinMind API Token！")
+if st.button("取得資料並分析"):
+    if not api_token:
+        st.error("請先輸入 FinMind API Token")
     else:
         try:
+            # 初始化 FinMind API
             api = DataLoader()
-            api.login_by_token(api_token=FINMIND_TOKEN)
+            api.login_by_token(api_token)
 
-            # 技術面分析
-            start_dt_tech = (pd.Timestamp.now() - pd.Timedelta(days=120)).strftime('%Y-%m-%d')
-            end_dt_tech = pd.Timestamp.now().strftime('%Y-%m-%d')
+            # 抓取股價資料
+            df = api.taiwan_stock_daily(
+                stock_id=stock_id,
+                start_date=str(start_date),
+                end_date=str(end_date)
+            )
 
-            df_daily = api.taiwan_stock_daily(stock_id=stock_code, start_date=start_dt_tech, end_date=end_dt_tech)
-            if df_daily.empty:
-                st.error("找不到該股票的技術面股價資料")
+            if df.empty:
+                st.error("查無資料，請確認股票代號或日期範圍。")
             else:
-                df_daily = df_daily.sort_values('date').reset_index(drop=True)
-                df_daily['MA5'] = df_daily['close'].rolling(window=5).mean()
-                df_daily['MA20'] = df_daily['close'].rolling(window=20).mean()
-                df_daily['RSI14'] = ta.rsi(df_daily['close'], length=14)
+                df['date'] = pd.to_datetime(df['date'])
+                df.set_index('date', inplace=True)
 
-                kd_df = ta.stoch(high=df_daily['max'], low=df_daily['min'], close=df_daily['close'], k=9, d=3, smooth_k=3)
-                df_daily['K'] = kd_df['STOCHk_9_3_3']
-                df_daily['D'] = kd_df['STOCHd_9_3_3']
+                # 計算技術指標
+                df['MA20'] = talib.SMA(df['close'], timeperiod=20)
+                df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+                macd, macd_signal, macd_hist = talib.MACD(df['close'])
+                df['MACD'] = macd
+                df['MACD_signal'] = macd_signal
+                df['MACD_hist'] = macd_hist
 
-                today = df_daily.iloc[-1]
-                yesterday = df_daily.iloc[-2]
+                # 顯示表格
+                st.subheader("📊 技術指標數據")
+                st.dataframe(df[['close', 'MA20', 'RSI', 'MACD', 'MACD_signal', 'MACD_hist']].tail(30))
 
-                st.subheader("📈 技術面分析")
-                st.write(f"今日收盤價: {today['close']} 元")
-                st.write(f"5MA: {today['MA5']:.1f} / 20MA: {today['MA20']:.1f}")
-                st.write(f"K={today['K']:.1f}, D={today['D']:.1f}, RSI={today['RSI14']:.1f}")
+                # 畫圖
+                st.subheader("📈 股價與 MA20")
+                st.line_chart(df[['close', 'MA20']])
 
-            # 基本面河流分析
-            start_dt_river = f"{pd.Timestamp.now().year-3}-01-01"
-            df_river = api.taiwan_stock_daily(stock_id=stock_code, start_date=start_dt_river, end_date=end_dt_tech)
-            df_financial = api.taiwan_stock_financial_statement(stock_id=stock_code, start_date=start_dt_river)
+                st.subheader("📉 RSI 指標")
+                st.line_chart(df[['RSI']])
 
-            if df_river.empty or df_financial.empty:
-                st.error("找不到該股票的財報或股價資料")
-            else:
-                type_col = 'type' if 'type' in df_financial.columns else 'Type'
-                val_col = 'value' if 'value' in df_financial.columns else 'Value'
-                df_eps_raw = df_financial[df_financial[type_col].str.contains('EPS', case=False, na=False)].copy()
-                df_eps_raw['date'] = pd.to_datetime(df_eps_raw['date'])
-                df_eps_raw = df_eps_raw.sort_values('date').reset_index(drop=True)
-
-                eps_timeline = []
-                for i in range(len(df_eps_raw)):
-                    if i >= 3:
-                        eps_timeline.append({'date': df_eps_raw['date'].iloc[i], 'rolling_eps': df_eps_raw[val_col].iloc[i-3:i+1].sum()})
-                df_eps_rolling = pd.DataFrame(eps_timeline)
-
-                df_river['date'] = pd.to_datetime(df_river['date'])
-                df_merge = pd.merge_asof(df_river, df_eps_rolling, on='date', direction='backward')
-                df_merge['PE'] = df_merge['close'] / df_merge['rolling_eps']
-                df_clean_pe = df_merge[(df_merge['PE'] > 2) & (df_merge['PE'] < 60)]['PE']
-
-                pe_low, pe_mid, pe_high = df_clean_pe.quantile(0.15), df_clean_pe.quantile(0.50), df_clean_pe.quantile(0.85)
-                eps_4q = df_eps_rolling.iloc[-1]['rolling_eps']
-
-                st.subheader("🏠 財報估值分析")
-                st.write(f"近四季累積 EPS：{eps_4q:.2f} 元")
-                st.write(f"本益比區間：便宜 {pe_low:.1f} / 合理 {pe_mid:.1f} / 昂貴 {pe_high:.1f}")
-                st.write(f"河流估值：便宜 {eps_4q*pe_low:.1f} 元 / 合理 {eps_4q*pe_mid:.1f} 元 / 昂貴 {eps_4q*pe_high:.1f} 元")
+                st.subheader("📉 MACD 指標")
+                st.line_chart(df[['MACD', 'MACD_signal']])
 
         except Exception as e:
-            st.error(f"系統發生錯誤: {str(e)}")
+            st.error(f"發生錯誤: {e}")
