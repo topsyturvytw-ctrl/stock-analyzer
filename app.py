@@ -5,7 +5,7 @@ from FinMind.data import DataLoader
 st.title("📈 股票技術分析器 (純 pandas + FinMind)")
 
 # 使用者輸入 FinMind API Token
-api_token = st.text_input("請輸入你的 FinMind API Token:", type="password")
+api_token = st.text_input("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidG9wc3l0dXJ2eS50dyIsImVtYWlsIjoidG9wc3l0dXJ2eS50d0B5YWhvby5jb20udHciLCJ0b2tlbl92ZXJzaW9uIjowfQ.g8F7_b3ru58bFwW4JLe6JnD4IyV_0x5KFLFbG1j3Y8A", type="password")
 
 # 使用者輸入股票代號
 stock_id = st.text_input("請輸入股票代號 (例如 2330):", "2330")
