@@ -1,3 +1,4 @@
 streamlit==1.32.0
 pandas==2.3.3
 numpy==1.26.4
+FinMind==1.9.10
