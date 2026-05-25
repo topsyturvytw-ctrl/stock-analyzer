@@ -1,5 +1,5 @@
-streamlit==1.32.0
-pandas==3.0.3
-numpy==2.4.0
-FinMind==1.9.10
-tqdm==4.66.2
+streamlit
+pandas
+numpy
+FinMind
+tqdm
