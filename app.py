@@ -1,16 +1,10 @@
 import streamlit as st
 import pandas as pd
-from FinMind.data import DataLoader
+import yfinance as yf
 
-st.title("📈 股票技術分析器 (純 pandas + FinMind)")
+st.title("📈 股票技術分析器 (純 pandas + yfinance)")
 
-# 使用者輸入 FinMind API Token
-api_token = st.text_input("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidG9wc3l0dXJ2eS50dyIsImVtYWlsIjoidG9wc3l0dXJ2eS50d0B5YWhvby5jb20udHciLCJ0b2tlbl92ZXJzaW9uIjowfQ.g8F7_b3ru58bFwW4JLe6JnD4IyV_0x5KFLFbG1j3Y8A", type="password")
-
-# 使用者輸入股票代號
-stock_id = st.text_input("請輸入股票代號 (例如 2330):", "2330")
-
-# 選擇日期範圍
+stock_id = st.text_input("請輸入股票代號 (例如 2330.TW):", "2330.TW")
 start_date = st.date_input("開始日期", pd.to_datetime("2024-01-01"))
 end_date = st.date_input("結束日期", pd.to_datetime("2024-12-31"))
 
@@ -30,45 +24,29 @@ def compute_macd(series, fast=12, slow=26, signal=9):
     return macd, macd_signal, macd_hist
 
 if st.button("取得資料並分析"):
-    if not api_token:
-        st.error("請先輸入 FinMind API Token")
-    else:
-        try:
-            api = DataLoader()
-            api.login_by_token(api_token)
+    try:
+        df = yf.download(stock_id, start=start_date, end=end_date)
 
-            df = api.taiwan_stock_daily(
-                stock_id=stock_id,
-                start_date=str(start_date),
-                end_date=str(end_date)
-            )
+        if df.empty:
+            st.error("查無資料，請確認股票代號或日期範圍。")
+        else:
+            df['MA20'] = df['Close'].rolling(20).mean()
+            df['RSI'] = compute_rsi(df['Close'])
+            df['MACD'], df['MACD_signal'], df['MACD_hist'] = compute_macd(df['Close'])
 
-            if df.empty:
-                st.error("查無資料，請確認股票代號或日期範圍。")
-            else:
-                df['date'] = pd.to_datetime(df['date'])
-                df.set_index('date', inplace=True)
+            st.subheader("📊 技術指標數據")
+            st.dataframe(df[['Close', 'MA20', 'RSI', 'MACD', 'MACD_signal', 'MACD_hist']].tail(30))
 
-                # 技術指標 (純 pandas)
-                df['MA20'] = df['close'].rolling(20).mean()
-                df['RSI'] = compute_rsi(df['close'])
-                df['MACD'], df['MACD_signal'], df['MACD_hist'] = compute_macd(df['close'])
+            st.subheader("📈 股價與 MA20")
+            st.line_chart(df[['Close', 'MA20']])
 
-                # 顯示表格
-                st.subheader("📊 技術指標數據")
-                st.dataframe(df[['close', 'MA20', 'RSI', 'MACD', 'MACD_signal', 'MACD_hist']].tail(30))
+            st.subheader("📉 RSI 指標")
+            st.line_chart(df[['RSI']])
 
-                # 畫圖
-                st.subheader("📈 股價與 MA20")
-                st.line_chart(df[['close', 'MA20']])
+            st.subheader("📉 MACD 指標")
+            st.line_chart(df[['MACD', 'MACD_signal']])
+    except Exception as e:
+        st.error(f"發生錯誤: {e}")
 
-                st.subheader("📉 RSI 指標")
-                st.line_chart(df[['RSI']])
-
-                st.subheader("📉 MACD 指標")
-                st.line_chart(df[['MACD', 'MACD_signal']])
-
-        except Exception as e:
-            st.error(f"發生錯誤: {e}")
 
 
