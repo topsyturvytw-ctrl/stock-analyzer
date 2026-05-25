@@ -7,7 +7,7 @@ from FinMind.data import DataLoader
 st.title("📈 股票技術分析器 (TA-Lib + FinMind)")
 
 # 使用者輸入 FinMind API Token
-api_token = st.text_input("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoidG9wc3l0dXJ2eS50dyIsImVtYWlsIjoidG9wc3l0dXJ2eS50d0B5YWhvby5jb20udHciLCJ0b2tlbl92ZXJzaW9uIjowfQ.g8F7_b3ru58bFwW4JLe6JnD4IyV_0x5KFLFbG1j3Y8A", type="password")
+api_token = st.text_input("請輸入你的 FinMind API Token:", type="password")
 
 # 使用者輸入股票代號
 stock_id = st.text_input("請輸入股票代號 (例如 2330):", "2330")
@@ -38,7 +38,7 @@ if st.button("取得資料並分析"):
                 df['date'] = pd.to_datetime(df['date'])
                 df.set_index('date', inplace=True)
 
-                # 計算技術指標
+                # 計算技術指標 (用 TA-Lib)
                 df['MA20'] = talib.SMA(df['close'], timeperiod=20)
                 df['RSI'] = talib.RSI(df['close'], timeperiod=14)
                 macd, macd_signal, macd_hist = talib.MACD(df['close'])
@@ -62,3 +62,4 @@ if st.button("取得資料並分析"):
 
         except Exception as e:
             st.error(f"發生錯誤: {e}")
+
