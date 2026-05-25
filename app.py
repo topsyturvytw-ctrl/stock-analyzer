@@ -26,7 +26,7 @@ def compute_macd(series, fast=12, slow=26, signal=9):
     return macd, macd_signal, macd_hist
 
 # 本益比河流計算
-def pe_river(price, eps, pe_ratios=[10,15,20,25]):
+def pe_river(eps, pe_ratios=[10,15,20,25]):
     fair_values = {f"PE{pe}": eps * pe for pe in pe_ratios}
     return fair_values
 
@@ -38,8 +38,8 @@ if st.button("取得資料並分析"):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [' '.join(col).strip() for col in df.columns.values]
 
-        if df.empty:
-            st.error("查無資料，請確認股票代號或日期範圍。")
+        if df.empty or 'Close' not in df.columns:
+            st.error(f"查無資料或缺少 'Close' 欄位，實際欄位有: {df.columns.tolist()}")
         else:
             df['MA20'] = df['Close'].rolling(20).mean()
             df['RSI'] = compute_rsi(df['Close'])
@@ -81,13 +81,20 @@ if st.button("取得資料並分析"):
 
             # 自動抓 EPS
             ticker = yf.Ticker(stock_id)
-            eps_data = ticker.financials.loc['Net Income'] / ticker.financials.loc['Shares Outstanding']
-            if not eps_data.empty:
-                eps = eps_data.iloc[-1]  # 最近一期 EPS
-            else:
+            eps = None
+            try:
+                # 嘗試從 info 取得 EPS
+                if "trailingEps" in ticker.info and ticker.info["trailingEps"]:
+                    eps = ticker.info["trailingEps"]
+                elif not ticker.earnings.empty:
+                    eps = ticker.earnings.iloc[-1]["Earnings"] / ticker.earnings.iloc[-1]["SharesOutstanding"]
+            except Exception:
+                pass
+
+            if eps is None:
                 eps = 10  # fallback 假設值
 
-            fair_values = pe_river(latest['Close'], eps)
+            fair_values = pe_river(eps)
             st.subheader("💰 本益比河流合理股價")
             st.write(f"最近 EPS: {eps:.2f}")
             for k,v in fair_values.items():
@@ -95,3 +102,4 @@ if st.button("取得資料並分析"):
 
     except Exception as e:
         st.error(f"發生錯誤: {e}")
+
