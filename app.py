@@ -5,7 +5,7 @@ import yfinance as yf
 st.title("📈 股票技術分析器 (含進出場判斷 + 本益比河流)")
 
 # 使用者輸入
-stock_id = st.text_input("請輸入股票代號 (例如 2330.TW):", "2330.TW")
+stock_id = st.text_input("請輸入股票代號 (例如 2330.TW 或 AAPL):", "2330.TW")
 start_date = st.date_input("開始日期", pd.to_datetime("2026-01-01"))
 end_date = st.date_input("結束日期", pd.to_datetime("2026-05-25"))
 
@@ -38,17 +38,24 @@ if st.button("取得資料並分析"):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [' '.join(col).strip() for col in df.columns.values]
 
-        if df.empty or 'Close' not in df.columns:
-            st.error(f"查無資料或缺少 'Close' 欄位，實際欄位有: {df.columns.tolist()}")
+        # 自動偵測 Close 欄位
+        close_col = None
+        for col in df.columns:
+            if "Close" in col:   # 找到包含 Close 的欄位
+                close_col = col
+                break
+
+        if df.empty or close_col is None:
+            st.error(f"查無資料或缺少 Close 欄位，實際欄位有: {df.columns.tolist()}")
         else:
-            df['MA20'] = df['Close'].rolling(20).mean()
-            df['RSI'] = compute_rsi(df['Close'])
-            df['MACD'], df['MACD_signal'], df['MACD_hist'] = compute_macd(df['Close'])
+            df['MA20'] = df[close_col].rolling(20).mean()
+            df['RSI'] = compute_rsi(df[close_col])
+            df['MACD'], df['MACD_signal'], df['MACD_hist'] = compute_macd(df[close_col])
 
             # 進出場判斷
             latest = df.iloc[-1]
             signals = []
-            if latest['Close'] > latest['MA20']:
+            if latest[close_col] > latest['MA20']:
                 signals.append("股價在 MA20 之上 → 偏多")
             else:
                 signals.append("股價在 MA20 之下 → 偏空")
@@ -64,10 +71,10 @@ if st.button("取得資料並分析"):
                 signals.append("MACD < Signal → 偏空")
 
             st.subheader("📊 技術指標數據")
-            st.dataframe(df[['Close','MA20','RSI','MACD','MACD_signal','MACD_hist']].tail(30))
+            st.dataframe(df[[close_col,'MA20','RSI','MACD','MACD_signal','MACD_hist']].tail(30))
 
             st.subheader("📈 股價與 MA20")
-            st.line_chart(df[['Close','MA20']])
+            st.line_chart(df[[close_col,'MA20']])
 
             st.subheader("📉 RSI 指標")
             st.line_chart(df[['RSI']])
@@ -83,11 +90,8 @@ if st.button("取得資料並分析"):
             ticker = yf.Ticker(stock_id)
             eps = None
             try:
-                # 嘗試從 info 取得 EPS
                 if "trailingEps" in ticker.info and ticker.info["trailingEps"]:
                     eps = ticker.info["trailingEps"]
-                elif not ticker.earnings.empty:
-                    eps = ticker.earnings.iloc[-1]["Earnings"] / ticker.earnings.iloc[-1]["SharesOutstanding"]
             except Exception:
                 pass
 
@@ -102,4 +106,5 @@ if st.button("取得資料並分析"):
 
     except Exception as e:
         st.error(f"發生錯誤: {e}")
+
 
